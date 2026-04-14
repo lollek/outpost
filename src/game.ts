@@ -1,15 +1,16 @@
-import { drawWorld } from './world.js';
-import { Player } from './player.js';
-import { Enemy } from './enemy.js';
+import { drawWorld } from './world';
+import { Player } from './player';
+import type { Input } from './player';
+import { Enemy } from './enemy';
 
-const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d');
+const canvas = document.getElementById('canvas') as HTMLCanvasElement;
+const ctx = canvas.getContext('2d')!;
 canvas.width  = 800;
 canvas.height = 600;
 
 // ── Input ──────────────────────────────────────────────────────────────────
 
-const input = { up: false, down: false, left: false, right: false };
+const input: Input = { up: false, down: false, left: false, right: false };
 
 window.addEventListener('keydown', e => {
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
@@ -19,7 +20,7 @@ window.addEventListener('keydown', e => {
 });
 window.addEventListener('keyup', e => mapKey(e.key, false));
 
-function mapKey(key, val) {
+function mapKey(key: string, val: boolean): void {
   if (key === 'w' || key === 'ArrowUp')    input.up    = val;
   if (key === 's' || key === 'ArrowDown')  input.down  = val;
   if (key === 'a' || key === 'ArrowLeft')  input.left  = val;
@@ -43,7 +44,7 @@ const enemy = new Enemy(650, 130, [
 
 let prev = 0;
 
-function loop(ts) {
+function loop(ts: number): void {
   const dt = Math.min((ts - prev) / 1000, 0.05); // cap spike frames at 50 ms
   prev = ts;
 
@@ -58,7 +59,7 @@ function loop(ts) {
   requestAnimationFrame(loop);
 }
 
-function drawHUD(ctx) {
+function drawHUD(ctx: CanvasRenderingContext2D): void {
   const chasing = enemy.state === 'chase';
   const msg = chasing
     ? '! SPOTTED — break line-of-sight to lose the enemy'
@@ -71,5 +72,4 @@ function drawHUD(ctx) {
   ctx.fillText(msg, 12, 20);
 }
 
-// Kick off
 requestAnimationFrame(ts => { prev = ts; requestAnimationFrame(loop); });

@@ -1,9 +1,9 @@
+import type { Wall } from './los';
+
 export const W = 800;
 export const H = 600;
 
-// Each wall: { x, y, w, h } in pixels.
-// Arranged to give several hiding spots the player can duck into.
-export const WALLS = [
+export const WALLS: Wall[] = [
   // Top-left L-shape — cover near player spawn
   { x: 185, y: 115, w: 155, h: 22 },
   { x: 185, y: 115, w: 22,  h: 115 },
@@ -24,13 +24,12 @@ export const WALLS = [
   { x: 325, y: 285, w: 110, h: 22 },
 ];
 
-export function drawWorld(ctx) {
+export function drawWorld(ctx: CanvasRenderingContext2D): void {
   // Ground
   ctx.fillStyle = '#2e4a1e';
   ctx.fillRect(0, 0, W, H);
 
   for (const w of WALLS) {
-    // Base stone colour
     ctx.fillStyle = '#8a7560';
     ctx.fillRect(w.x, w.y, w.w, w.h);
     // Top / left highlight

@@ -1,16 +1,26 @@
-import { circleOverlapsRect } from './los.js';
-import { WALLS, W, H } from './world.js';
+import { circleOverlapsRect } from './los';
+import { WALLS, W, H } from './world';
+
+export interface Input {
+  up: boolean;
+  down: boolean;
+  left: boolean;
+  right: boolean;
+}
 
 const SPEED = 180; // px/s
 export const RADIUS = 10;
 
 export class Player {
-  constructor(x, y) {
+  x: number;
+  y: number;
+
+  constructor(x: number, y: number) {
     this.x = x;
     this.y = y;
   }
 
-  update(input, dt) {
+  update(input: Input, dt: number): void {
     let dx = 0, dy = 0;
     if (input.left)  dx -= 1;
     if (input.right) dx += 1;
@@ -28,7 +38,7 @@ export class Player {
     this._tryMove(0, dy * SPEED * dt);
   }
 
-  _tryMove(dx, dy) {
+  private _tryMove(dx: number, dy: number): void {
     const nx = Math.max(RADIUS, Math.min(W - RADIUS, this.x + dx));
     const ny = Math.max(RADIUS, Math.min(H - RADIUS, this.y + dy));
 
@@ -40,7 +50,7 @@ export class Player {
     this.y = ny;
   }
 
-  draw(ctx) {
+  draw(ctx: CanvasRenderingContext2D): void {
     ctx.beginPath();
     ctx.arc(this.x, this.y, RADIUS, 0, Math.PI * 2);
     ctx.fillStyle = '#4fc3f7';

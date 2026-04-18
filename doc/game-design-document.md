@@ -17,6 +17,12 @@ Outpost is a top-down single-player survival game inspired by Rust. The player s
 
 ---
 
+## Perspective
+
+The game is top-down. Roofs are rendered on all buildings by default. When the player enters a building, only that building's roof is removed — other structures remain opaque. This means the interior of enemy camps and structures is hidden until the player steps inside, which preserves the tension of entering unknown space.
+
+---
+
 ## Core Loop
 
 **Morning → Midday:** Resource gathering, base building, expansion. Enemies are active but cautious — they prioritize escape over combat when carrying loot.
@@ -35,6 +41,20 @@ Outpost is a top-down single-player survival game inspired by Rust. The player s
 - **Evening:** Scout units appear. They behave differently from regular enemies — distinct movement pattern, visible tell. If a scout escapes, it raises the night raid probability.
 - **Night:** Raid parties assault the player's base. Raid size and strength scales with threat level accumulated during the evening.
 - **Faction expansion:** Nearby enemy factions grow if left alone. Actively suppressing them keeps the local threat manageable. Ignoring them leads to larger, better-equipped raids.
+
+---
+
+## Base Building
+
+Building is grid-based. Structures are placed tile by tile — walls, doors, and eventually floors, furniture, and crafting stations.
+
+**Structural integrity:** Every buildable part has HP. Doors are the designated weak point and fall faster than walls. At high threat levels, raid parties will attack walls directly if the entrance is too costly to breach — forcing the player to think beyond just fortifying the door.
+
+**Repair:**
+- Hold a key while adjacent to a damaged tile to repair it. Repair is never automatic.
+- During a raid, repair is disabled entirely — fight first, patch after.
+- After a raid ends, repairs cost resources.
+- During daytime, repairs are free and instant. Morning becomes a natural perimeter-check ritual.
 
 ---
 
@@ -69,6 +89,21 @@ The wipe cycle length is naturally tied to the tech tree ceiling:
 - As the game expands: higher caps → longer runs (up to a day of casual play)
 
 This lets balance emerge from development rather than requiring upfront tuning.
+
+---
+
+## Atmosphere
+
+The target feeling inside the player's base is **quiet relief** — the hostile world receding, a moment to breathe.
+
+This is achieved through contrast, not decoration:
+
+- **Sound boundary** — ambient world sounds (wind, distant enemies, wildlife) muffle when the player steps inside. The outside needs to feel present and slightly threatening so that the inside feels like escape.
+- **Lighting contrast** — warm interior light from fires and torches against a darker outside. The player's own light sources make the space feel owned.
+- **No UI pressure** — the threat meter remains visible but passive. No flashing, no countdowns. Just stillness.
+- **Perceptible threshold** — entering the base triggers a subtle cue (sound shift, lighting transition) so crossing inside feels like crossing into safety, not just a rendering change.
+
+Atmosphere is built from contrast and sound. Visual complexity and decoration are not required to achieve it.
 
 ---
 

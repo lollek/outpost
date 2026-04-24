@@ -36,6 +36,7 @@ function mapKey(key: string, val: boolean): void {
 let mouseX = 0, mouseY = 0;
 let buildMode = false;
 let wallHorizontal = true;
+let camX = 0, camY = 0;
 
 function toCanvasCoords(e: MouseEvent): {x: number; y: number} {
   const rect = canvas.getBoundingClientRect();
@@ -45,13 +46,18 @@ function toCanvasCoords(e: MouseEvent): {x: number; y: number} {
   };
 }
 
+function toWorldCoords(sx: number, sy: number): {x: number; y: number} {
+  return { x: sx - camX, y: sy - camY };
+}
+
 canvas.addEventListener('mousemove', e => {
   ({ x: mouseX, y: mouseY } = toCanvasCoords(e));
 });
 
 canvas.addEventListener('mousedown', e => {
   if (e.button !== 0) return;
-  const { x: mx, y: my } = toCanvasCoords(e);
+  const { x: sx, y: sy } = toCanvasCoords(e);
+  const { x: mx, y: my } = toWorldCoords(sx, sy);
   if (buildMode) {
     const { wx, wy, ww, wh } = ghostRect(mx, my);
     player.buildAt(wx, wy, ww, wh, trees);
@@ -98,16 +104,30 @@ function loop(ts: number): void {
   player.update(input, trees, dt);
   enemy.update(player, trees, dt);
 
+  camX = canvas.width  / 2 - player.x;
+  camY = canvas.height / 2 - player.y;
+
+  // Background fill covers any area outside the world bounds
+  ctx.fillStyle = '#2e4a1e';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.save();
+  ctx.translate(camX, camY);
+
   drawWorld(ctx);
 
   if (buildMode) {
-    const { wx, wy, ww, wh } = ghostRect(mouseX, mouseY);
+    const { x: wmx, y: wmy } = toWorldCoords(mouseX, mouseY);
+    const { wx, wy, ww, wh } = ghostRect(wmx, wmy);
     drawGhostWall(ctx, wx, wy, ww, wh, player.canBuildAt(wx, wy, ww, wh, trees));
   }
 
   drawTrees(ctx, trees);
   player.draw(ctx);
   enemy.draw(ctx);
+
+  ctx.restore();
+
   drawHUD(ctx);
 
   requestAnimationFrame(loop);

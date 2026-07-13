@@ -6,12 +6,15 @@ Early in development. See [doc/game-design-document.md](doc/game-design-document
 
 ## What's here now
 
-The current build covers the foundation of the game loop:
-
-- Top-down movement with wall collision
+- Top-down movement with collision against walls, trees, and rocks
+- A seeded procedural world — 8000×6000 px (10×10 screens), divided into 400 px chunks
+- Scattered trees (choppable for wood), rock clusters, and POI structures (ruins and camp shells) generated per-chunk from the world seed
+- A spawn clearing kept free so you never wake up inside an obstacle
+- Camera that scrolls and clamps to world bounds
 - An enemy that patrols a waypoint path with a visible cone of vision
-- Line-of-sight detection — duck behind walls to break it
+- Line-of-sight detection blocked by walls, trees, and rocks — duck behind cover to break it
 - Chase and give-up states based on whether the enemy can see you
+- Grid-snapped wall building (costs 3 wood)
 
 ## Getting started
 
@@ -22,7 +25,9 @@ npm install
 npm run dev
 ```
 
-Then open [http://localhost:5173](http://localhost:5173) in your browser. Use WASD or arrow keys to move.
+Then open [http://localhost:5173](http://localhost:5173) in your browser. Use WASD or arrow keys to move. Click a tree to chop it. Press **B** to enter build mode, **R** to rotate the wall preview, click to place.
+
+Change `SEED` in `src/game.ts` for a different map.
 
 ## Other commands
 
@@ -44,12 +49,17 @@ npm run build     # type-check + production bundle
 
 ```
 src/
-  game.ts       # entry point — game loop, input, entities
-  player.ts     # player movement and collision
-  enemy.ts      # enemy patrol, LOS detection, chase state
-  world.ts      # wall layout and rendering
-  los.ts        # line-of-sight geometry (segment intersection, circle-rect)
-  los.test.ts   # unit tests for los.ts
+  game.ts         # entry point — game loop, input, camera, entities
+  player.ts       # player movement, collision, chopping, building
+  enemy.ts        # enemy patrol, LOS detection, chase state
+  world.ts        # chunked World — spatial queries, rendering, biome dispatch
+  worldgen.ts     # per-chunk procedural generation (trees, rocks, structures)
+  rng.ts          # deterministic PRNG (mulberry32 + coordinate hashing)
+  los.ts          # line-of-sight geometry (segment intersection, circle-rect)
+  los.test.ts     # unit tests for los.ts
+  pathfinding.ts  # windowed A* (local grid around query, not whole map)
+  tree.ts         # Tree type, draw, segment-blocking
+  rock.ts         # Rock type, draw, segment-blocking
 doc/
   game-design-document.md
 ```

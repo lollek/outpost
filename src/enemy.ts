@@ -1,6 +1,7 @@
 import { hasLineOfSight, circleOverlapsRect } from './los';
-import { WALLS, W, H } from './world';
-import { TREE_RADIUS, treeBlocksSegment, type Tree } from './tree';
+import { W, H, type World } from './world';
+import { TREE_RADIUS, treeBlocksSegment } from './tree';
+import { rockBlocksSegment } from './rock';
 import { findPath, CELL } from './pathfinding';
 import type { Player } from './player';
 
@@ -30,7 +31,7 @@ export class Enemy {
   private wpIndex: number;
   private losTimer: number;
   private lastKnown: Vec2;
-  private trees: Tree[] = [];
+  private world!: World;
   private path: Array<{x: number; y: number}> = [];
   private lastWpIndex = -1;
 
@@ -46,9 +47,9 @@ export class Enemy {
     this.lastKnown = { x, y };
   }
 
-  update(player: Player, trees: Tree[], dt: number): void {
-    this.trees = trees;
-    this.seesPlayer = this._checkLOS(player, trees);
+  update(player: Player, world: World, dt: number): void {
+    this.world = world;
+    this.seesPlayer = this._checkLOS(player);
 
     if (this.state === State.Patrol) {
       this._doPatrol(dt);
@@ -78,7 +79,7 @@ export class Enemy {
 
     // Replan when waypoint changes (also handles initial planning on first call)
     if (this.lastWpIndex !== this.wpIndex) {
-      this.path = findPath(this.x, this.y, wp.x, wp.y, WALLS, this.trees);
+      this.path = findPath(this.x, this.y, wp.x, wp.y, this.world);
       this.lastWpIndex = this.wpIndex;
     }
 
@@ -112,13 +113,14 @@ export class Enemy {
     let nx = Math.max(ENEMY_RADIUS, Math.min(W - ENEMY_RADIUS, this.x + dx));
     let ny = Math.max(ENEMY_RADIUS, Math.min(H - ENEMY_RADIUS, this.y + dy));
 
-    for (const w of WALLS) {
+    const near = ENEMY_RADIUS + 20;
+    for (const w of this.world.wallsInRect(nx - near, ny - near, near * 2, near * 2)) {
       if (circleOverlapsRect(nx, ny, ENEMY_RADIUS, w.x, w.y, w.w, w.h)) return;
     }
 
-    // Trees use a separation push rather than a hard block so the enemy
-    // slides around them instead of freezing when a waypoint is behind one.
-    for (const t of this.trees) {
+    // Trees and rocks use a separation push rather than a hard block so the
+    // enemy slides around them instead of freezing when a waypoint is behind one.
+    for (const t of this.world.treesInRect(nx - near, ny - near, near * 2, near * 2)) {
       const d    = Math.hypot(nx - t.x, ny - t.y);
       const minD = ENEMY_RADIUS + TREE_RADIUS;
       if (d < minD && d > 0.001) {
@@ -126,12 +128,20 @@ export class Enemy {
         ny += (ny - t.y) / d * (minD - d);
       }
     }
+    for (const rk of this.world.rocksInRect(nx - near, ny - near, near * 2, near * 2)) {
+      const d    = Math.hypot(nx - rk.x, ny - rk.y);
+      const minD = ENEMY_RADIUS + rk.r;
+      if (d < minD && d > 0.001) {
+        nx += (nx - rk.x) / d * (minD - d);
+        ny += (ny - rk.y) / d * (minD - d);
+      }
+    }
 
     this.x = Math.max(ENEMY_RADIUS, Math.min(W - ENEMY_RADIUS, nx));
     this.y = Math.max(ENEMY_RADIUS, Math.min(H - ENEMY_RADIUS, ny));
   }
 
-  private _checkLOS(player: Player, trees: Tree[]): boolean {
+  private _checkLOS(player: Player): boolean {
     const dx = player.x - this.x;
     const dy = player.y - this.y;
     if (Math.hypot(dx, dy) > VISION_DIST) return false;
@@ -141,8 +151,12 @@ export class Enemy {
     while (diff < -Math.PI) diff += 2 * Math.PI;
     if (Math.abs(diff) > VISION_HALF) return false;
 
-    if (!hasLineOfSight(this.x, this.y, player.x, player.y, WALLS)) return false;
-    if (trees.some(t => treeBlocksSegment(this.x, this.y, player.x, player.y, t))) return false;
+    const walls = this.world.wallsForSegment(this.x, this.y, player.x, player.y);
+    if (!hasLineOfSight(this.x, this.y, player.x, player.y, walls)) return false;
+    if (this.world.treesForSegment(this.x, this.y, player.x, player.y)
+      .some(t => treeBlocksSegment(this.x, this.y, player.x, player.y, t))) return false;
+    if (this.world.rocksForSegment(this.x, this.y, player.x, player.y)
+      .some(r => rockBlocksSegment(this.x, this.y, player.x, player.y, r))) return false;
 
     return true;
   }

@@ -67,3 +67,26 @@ export function circleOverlapsRect(
   const dy = cy - nearY;
   return dx * dx + dy * dy < r * r;
 }
+
+/**
+ * Returns true if the segment (ox,oy)→(tx,ty) passes through the circle
+ * centred at (cx,cy) with radius r.
+ */
+export function segmentIntersectsCircle(
+  ox: number, oy: number,
+  tx: number, ty: number,
+  cx: number, cy: number, r: number,
+): boolean {
+  const dx = tx - ox, dy = ty - oy;
+  const fx = ox - cx, fy = oy - cy;
+  const a = dx * dx + dy * dy;
+  const b = 2 * (fx * dx + fy * dy);
+  const c = fx * fx + fy * fy - r * r;
+  if (a < 1e-12) return c <= 0; // degenerate segment: is the point inside?
+  const disc = b * b - 4 * a * c;
+  if (disc < 0) return false;
+  const s = Math.sqrt(disc);
+  const t1 = (-b - s) / (2 * a);
+  const t2 = (-b + s) / (2 * a);
+  return (t1 >= 0 && t1 <= 1) || (t2 >= 0 && t2 <= 1);
+}

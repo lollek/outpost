@@ -1,13 +1,17 @@
-import { drawWorld } from './world';
+import { World, W, H, spawnPoint, type View } from './world';
 import { Player, TILE, WALL_W, WALL_T } from './player';
 import type { Input } from './player';
 import { Enemy } from './enemy';
-import { makeTrees, drawTrees } from './tree';
 
 const canvas = document.getElementById('canvas') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
 canvas.width  = 800;
 canvas.height = 600;
+
+// Deterministic world — change SEED (or make it user-supplied) for a fresh map.
+const SEED = 1337;
+
+const clamp = (v: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, v));
 
 // ── Input ──────────────────────────────────────────────────────────────────
 
@@ -60,24 +64,25 @@ canvas.addEventListener('mousedown', e => {
   const { x: mx, y: my } = toWorldCoords(sx, sy);
   if (buildMode) {
     const { wx, wy, ww, wh } = ghostRect(mx, my);
-    player.buildAt(wx, wy, ww, wh, trees);
+    player.buildAt(world, wx, wy, ww, wh);
   } else {
-    player.chop(trees, mx, my);
+    player.chop(world, mx, my);
   }
 });
 
 // ── Entities ───────────────────────────────────────────────────────────────
 
-const player = new Player(90, 90);
-const trees  = makeTrees();
+const world  = new World(SEED);
+const player = new Player(spawnPoint.x, spawnPoint.y);
 
-// Patrol path: a wide loop around the map
-const enemy = new Enemy(650, 130, [
-  { x: 650, y: 130 },
-  { x: 700, y: 450 },
-  { x: 340, y: 510 },
-  { x:  95, y: 310 },
-  { x: 295, y:  95 },
+// Patrol path: a loop around the spawn area, kept local so the enemy stays
+// near the player early on.
+const s = spawnPoint;
+const enemy = new Enemy(s.x + 260, s.y - 180, [
+  { x: s.x + 260, y: s.y - 180 },
+  { x: s.x + 320, y: s.y + 240 },
+  { x: s.x - 260, y: s.y + 300 },
+  { x: s.x - 320, y: s.y - 140 },
 ]);
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -101,28 +106,29 @@ function loop(ts: number): void {
   const dt = Math.min((ts - prev) / 1000, 0.05);
   prev = ts;
 
-  player.update(input, trees, dt);
-  enemy.update(player, trees, dt);
+  player.update(input, world, dt);
+  enemy.update(player, world, dt);
 
-  camX = canvas.width  / 2 - player.x;
-  camY = canvas.height / 2 - player.y;
+  // Camera centres on the player, clamped so it never scrolls past the edges.
+  camX = clamp(canvas.width  / 2 - player.x, canvas.width  - W, 0);
+  camY = clamp(canvas.height / 2 - player.y, canvas.height - H, 0);
 
-  // Background fill covers any area outside the world bounds
-  ctx.fillStyle = '#2e4a1e';
+  const view: View = { x: -camX, y: -camY, w: canvas.width, h: canvas.height };
+
+  ctx.fillStyle = '#1a1a1a';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   ctx.save();
   ctx.translate(camX, camY);
 
-  drawWorld(ctx);
+  world.draw(ctx, view);
 
   if (buildMode) {
     const { x: wmx, y: wmy } = toWorldCoords(mouseX, mouseY);
     const { wx, wy, ww, wh } = ghostRect(wmx, wmy);
-    drawGhostWall(ctx, wx, wy, ww, wh, player.canBuildAt(wx, wy, ww, wh, trees));
+    drawGhostWall(ctx, wx, wy, ww, wh, player.canBuildAt(world, wx, wy, ww, wh));
   }
 
-  drawTrees(ctx, trees);
   player.draw(ctx);
   enemy.draw(ctx);
 

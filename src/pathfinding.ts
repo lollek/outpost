@@ -1,12 +1,10 @@
-import type { Wall } from './los';
-import type { Tree } from './tree';
+import type { World } from './world';
 import { TREE_RADIUS } from './tree';
 
-export const CELL = 20;                        // grid resolution in px
-const COLS = Math.ceil(800 / CELL);            // 40
-const ROWS = Math.ceil(600 / CELL);            // 30
+export const CELL = 20;                          // grid resolution in px
 const AGENT_RADIUS = 10;
-const CLEARANCE    = AGENT_RADIUS + CELL / 2; // pad by half a cell so the enemy never grazes edges
+const CLEARANCE    = AGENT_RADIUS + CELL / 2;   // pad so the agent never grazes edges
+const PAD          = 6 * CELL;                  // window padding around start/target
 
 const DIRS: [number, number, number][] = [
   [ 0, -1, 1], [ 0,  1, 1], [-1,  0, 1], [ 1,  0, 1],
@@ -14,38 +12,53 @@ const DIRS: [number, number, number][] = [
   [-1,  1, Math.SQRT2], [ 1,  1, Math.SQRT2],
 ];
 
-function cellBlocked(col: number, row: number, walls: Wall[], trees: Tree[]): boolean {
-  if (col < 0 || col >= COLS || row < 0 || row >= ROWS) return true;
-  const cx = col * CELL + CELL / 2;
-  const cy = row * CELL + CELL / 2;
-  for (const w of walls) {
-    const nearX = Math.max(w.x, Math.min(cx, w.x + w.w));
-    const nearY = Math.max(w.y, Math.min(cy, w.y + w.h));
-    if (Math.hypot(cx - nearX, cy - nearY) < CLEARANCE) return true;
-  }
-  for (const t of trees) {
-    if (Math.hypot(cx - t.x, cy - t.y) < CLEARANCE + TREE_RADIUS) return true;
-  }
-  return false;
-}
-
-// Returns a list of world positions leading from (sx,sy) to (tx,ty),
-// or [{x:tx,y:ty}] as a fallback if no path exists.
+// A* over a local grid window covering start + target (plus padding), clamped to
+// the world. Sizing the grid to the query — not the whole world — keeps
+// pathfinding cheap as the world scales, and the obstacle lists are fetched from
+// the world once per call for just that window.
 export function findPath(
   sx: number, sy: number,
   tx: number, ty: number,
-  walls: Wall[], trees: Tree[],
-): Array<{x: number; y: number}> {
-  const sc = Math.floor(sx / CELL), sr = Math.floor(sy / CELL);
-  const ec = Math.floor(tx / CELL), er = Math.floor(ty / CELL);
+  world: World,
+): Array<{ x: number; y: number }> {
+  const originX = Math.floor((Math.min(sx, tx) - PAD) / CELL) * CELL;
+  const originY = Math.floor((Math.min(sy, ty) - PAD) / CELL) * CELL;
+  const cols = Math.max(1, Math.ceil((Math.max(sx, tx) + PAD - originX) / CELL));
+  const rows = Math.max(1, Math.ceil((Math.max(sy, ty) + PAD - originY) / CELL));
 
-  const n = COLS * ROWS;
+  const walls = world.wallsInRect(originX, originY, cols * CELL, rows * CELL);
+  const trees = world.treesInRect(originX, originY, cols * CELL, rows * CELL);
+  const rocks = world.rocksInRect(originX, originY, cols * CELL, rows * CELL);
+
+  const idx = (c: number, r: number): number => r * cols + c;
+
+  const cellBlocked = (col: number, row: number): boolean => {
+    if (col < 0 || col >= cols || row < 0 || row >= rows) return true;
+    const cx = originX + col * CELL + CELL / 2;
+    const cy = originY + row * CELL + CELL / 2;
+    for (const w of walls) {
+      const nearX = Math.max(w.x, Math.min(cx, w.x + w.w));
+      const nearY = Math.max(w.y, Math.min(cy, w.y + w.h));
+      if (Math.hypot(cx - nearX, cy - nearY) < CLEARANCE) return true;
+    }
+    for (const t of trees) {
+      if (Math.hypot(cx - t.x, cy - t.y) < CLEARANCE + TREE_RADIUS) return true;
+    }
+    for (const rk of rocks) {
+      if (Math.hypot(cx - rk.x, cy - rk.y) < CLEARANCE + rk.r) return true;
+    }
+    return false;
+  };
+
+  const sc = Math.floor((sx - originX) / CELL), sr = Math.floor((sy - originY) / CELL);
+  const ec = Math.floor((tx - originX) / CELL), er = Math.floor((ty - originY) / CELL);
+
+  const n = cols * rows;
   const gScore  = new Float32Array(n).fill(Infinity);
   const fScore  = new Float32Array(n).fill(Infinity);
   const parent  = new Int32Array(n).fill(-1);
   const visited = new Uint8Array(n);
   const inOpen  = new Uint8Array(n);
-  const idx     = (c: number, r: number) => r * COLS + c;
 
   const startI = idx(sc, sr);
   const endI   = idx(ec, er);
@@ -64,32 +77,32 @@ export function findPath(
     inOpen[cur] = 0;
 
     if (cur === endI) {
-      const path: Array<{x: number; y: number}> = [];
+      const path: Array<{ x: number; y: number }> = [];
       let k = endI;
       while (k !== startI) {
         path.unshift({
-          x: (k % COLS) * CELL + CELL / 2,
-          y: Math.floor(k / COLS) * CELL + CELL / 2,
+          x: originX + (k % cols) * CELL + CELL / 2,
+          y: originY + Math.floor(k / cols) * CELL + CELL / 2,
         });
         k = parent[k];
       }
-      // Snap final node to exact target
+      // Snap final node to the exact target.
       if (path.length === 0) path.push({ x: tx, y: ty });
       else path[path.length - 1] = { x: tx, y: ty };
       return path;
     }
 
     visited[cur] = 1;
-    const cc = cur % COLS, cr = Math.floor(cur / COLS);
+    const cc = cur % cols, cr = Math.floor(cur / cols);
 
     for (const [dc, dr, cost] of DIRS) {
       const nc = cc + dc, nr = cr + dr;
-      // Don't clip through wall corners on diagonal moves
+      // Don't clip through wall corners on diagonal moves.
       if (dc !== 0 && dr !== 0) {
-        if (cellBlocked(cc + dc, cr, walls, trees)) continue;
-        if (cellBlocked(cc, cr + dr, walls, trees)) continue;
+        if (cellBlocked(cc + dc, cr)) continue;
+        if (cellBlocked(cc, cr + dr)) continue;
       }
-      if (cellBlocked(nc, nr, walls, trees)) continue;
+      if (cellBlocked(nc, nr)) continue;
       const ni = idx(nc, nr);
       if (visited[ni]) continue;
       const tentG = gScore[cur] + cost;

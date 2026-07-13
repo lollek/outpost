@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { segmentsIntersect, hasLineOfSight, circleOverlapsRect } from './los';
+import { segmentsIntersect, hasLineOfSight, circleOverlapsRect, aabbWall } from './los';
 import type { Wall } from './los';
 
 describe('segmentsIntersect', () => {
@@ -26,7 +26,7 @@ describe('segmentsIntersect', () => {
 });
 
 describe('hasLineOfSight', () => {
-  const wall: Wall = { x: 5, y: 0, w: 2, h: 10 };
+  const wall: Wall = aabbWall(5, 0, 2, 10);
 
   it('is blocked when wall sits between two points', () => {
     expect(hasLineOfSight(0, 5, 10, 5, [wall])).toBe(false);
@@ -42,16 +42,16 @@ describe('hasLineOfSight', () => {
 
   it('is blocked by the first of several walls', () => {
     const walls: Wall[] = [
-      { x: 3, y: 0, w: 2, h: 10 },
-      { x: 7, y: 0, w: 2, h: 10 },
+      aabbWall(3, 0, 2, 10),
+      aabbWall(7, 0, 2, 10),
     ];
     expect(hasLineOfSight(0, 5, 15, 5, walls)).toBe(false);
   });
 
   it('is blocked by the second of several walls', () => {
     const walls: Wall[] = [
-      { x: 3, y: 20, w: 2, h: 10 }, // not in the way
-      { x: 7, y:  0, w: 2, h: 10 }, // blocks
+      aabbWall(3, 20, 2, 10), // not in the way
+      aabbWall(7,  0, 2, 10), // blocks
     ];
     expect(hasLineOfSight(0, 5, 15, 5, walls)).toBe(false);
   });

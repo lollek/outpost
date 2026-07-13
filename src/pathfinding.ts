@@ -1,4 +1,5 @@
 import type { World } from './world';
+import { circleOverlapsWall } from './los';
 import { TREE_RADIUS } from './tree';
 
 export const CELL = 20;                          // grid resolution in px
@@ -37,9 +38,7 @@ export function findPath(
     const cx = originX + col * CELL + CELL / 2;
     const cy = originY + row * CELL + CELL / 2;
     for (const w of walls) {
-      const nearX = Math.max(w.x, Math.min(cx, w.x + w.w));
-      const nearY = Math.max(w.y, Math.min(cy, w.y + w.h));
-      if (Math.hypot(cx - nearX, cy - nearY) < CLEARANCE) return true;
+      if (circleOverlapsWall(cx, cy, CLEARANCE, w)) return true;
     }
     for (const t of trees) {
       if (Math.hypot(cx - t.x, cy - t.y) < CLEARANCE + TREE_RADIUS) return true;

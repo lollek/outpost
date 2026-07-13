@@ -1,4 +1,4 @@
-import { hasLineOfSight, circleOverlapsRect } from './los';
+import { hasLineOfSight, circleOverlapsWall } from './los';
 import { W, H, type World } from './world';
 import { TREE_RADIUS, treeBlocksSegment } from './tree';
 import { rockBlocksSegment } from './rock';
@@ -115,7 +115,7 @@ export class Enemy {
 
     const near = ENEMY_RADIUS + 20;
     for (const w of this.world.wallsInRect(nx - near, ny - near, near * 2, near * 2)) {
-      if (circleOverlapsRect(nx, ny, ENEMY_RADIUS, w.x, w.y, w.w, w.h)) return;
+      if (circleOverlapsWall(nx, ny, ENEMY_RADIUS, w)) return;
     }
 
     // Trees and rocks use a separation push rather than a hard block so the

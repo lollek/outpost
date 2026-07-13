@@ -1,7 +1,7 @@
 import { mulberry32, hashCoords, randRange, randInt, chance, pick, type Rng } from './rng';
 import { TREE_MAX_HP, type Tree } from './tree';
 import type { Rock } from './rock';
-import type { Wall } from './los';
+import { aabbWall, wallBounds, WALL_T, type Wall } from './los';
 
 // Per-chunk procedural generation. Everything a chunk contains is derived
 // deterministically from (worldSeed, cx, cy), so a chunk regenerates identically
@@ -38,7 +38,6 @@ export interface ChunkContent {
 }
 
 const TREE_SPACING = 46; // min centre-to-centre distance between trees
-const WALL_T = 14;       // structure wall thickness
 
 export function generateChunk(
   seed: number, cx: number, cy: number, chunk: number,
@@ -102,7 +101,8 @@ function nearRock(x: number, y: number, rocks: Rock[]): boolean {
 
 function blockedByWall(x: number, y: number, pad: number, walls: Wall[]): boolean {
   for (const w of walls) {
-    if (x > w.x - pad && x < w.x + w.w + pad && y > w.y - pad && y < w.y + w.h + pad) {
+    const b = wallBounds(w);
+    if (x > b.x - pad && x < b.x + b.w + pad && y > b.y - pad && y < b.y + b.h + pad) {
       return true;
     }
   }
@@ -133,23 +133,23 @@ function addCamp(rng: Rng, x: number, y: number, w: number, h: number, walls: Wa
 }
 
 function addSideH(rng: Rng, walls: Wall[], x: number, y: number, w: number, t: number, gap: number): void {
-  if (gap <= 0) { walls.push({ x, y, w, h: t }); return; }
+  if (gap <= 0) { walls.push(aabbWall(x, y, w, t)); return; }
   const gx = x + randRange(rng, w * 0.3, w * 0.7) - gap / 2;
   const leftW = gx - x;
-  if (leftW > t) walls.push({ x, y, w: leftW, h: t });
+  if (leftW > t) walls.push(aabbWall(x, y, leftW, t));
   const rightStart = gx + gap;
   const rightW = x + w - rightStart;
-  if (rightW > t) walls.push({ x: rightStart, y, w: rightW, h: t });
+  if (rightW > t) walls.push(aabbWall(rightStart, y, rightW, t));
 }
 
 function addSideV(rng: Rng, walls: Wall[], x: number, y: number, t: number, h: number, gap: number): void {
-  if (gap <= 0) { walls.push({ x, y, w: t, h }); return; }
+  if (gap <= 0) { walls.push(aabbWall(x, y, t, h)); return; }
   const gy = y + randRange(rng, h * 0.3, h * 0.7) - gap / 2;
   const topH = gy - y;
-  if (topH > t) walls.push({ x, y, w: t, h: topH });
+  if (topH > t) walls.push(aabbWall(x, y, t, topH));
   const botStart = gy + gap;
   const botH = y + h - botStart;
-  if (botH > t) walls.push({ x, y: botStart, w: t, h: botH });
+  if (botH > t) walls.push(aabbWall(x, botStart, t, botH));
 }
 
 // Ruin: a broken perimeter — each side emits 0..2 partial segments.
@@ -169,7 +169,7 @@ function ruinSide(
   for (let i = 0; i < segs; i++) {
     const segLen = randRange(rng, len * 0.2, len * 0.5);
     const start = randRange(rng, 0, len - segLen);
-    if (horizontal) walls.push({ x: x + start, y, w: segLen, h: t });
-    else walls.push({ x, y: y + start, w: t, h: segLen });
+    if (horizontal) walls.push(aabbWall(x + start, y, segLen, t));
+    else walls.push(aabbWall(x, y + start, t, segLen));
   }
 }

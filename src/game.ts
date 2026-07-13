@@ -1,7 +1,8 @@
 import { World, W, H, spawnPoint, type View } from './world';
-import { Player, TILE, WALL_W, WALL_T } from './player';
+import { Player, WALL_LEN, WALL_T } from './player';
 import type { Input } from './player';
 import { Enemy } from './enemy';
+import { wallEndpoints, type Wall } from './los';
 
 const canvas = document.getElementById('canvas') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
@@ -23,10 +24,17 @@ window.addEventListener('keydown', e => {
   }
   mapKey(e.key, true);
   if (e.key === 'b' || e.key === 'B') buildMode = !buildMode;
-  if (e.key === 'r' || e.key === 'R') wallHorizontal = !wallHorizontal;
   if (e.key === 'Escape') buildMode = false;
+  if (e.key === 'q' || e.key === 'Q') { rotQ = true; if (shiftHeld && !e.repeat) snapSteps--; }
+  if (e.key === 'e' || e.key === 'E') { rotE = true; if (shiftHeld && !e.repeat) snapSteps++; }
+  if (e.key === 'Shift' && !shiftHeld) { shiftHeld = true; snapSteps = 0; }
 });
-window.addEventListener('keyup', e => mapKey(e.key, false));
+window.addEventListener('keyup', e => {
+  mapKey(e.key, false);
+  if (e.key === 'q' || e.key === 'Q') rotQ = false;
+  if (e.key === 'e' || e.key === 'E') rotE = false;
+  if (e.key === 'Shift') shiftHeld = false;
+});
 
 function mapKey(key: string, val: boolean): void {
   if (key === 'w' || key === 'ArrowUp')    input.up    = val;
@@ -39,8 +47,14 @@ function mapKey(key: string, val: boolean): void {
 
 let mouseX = 0, mouseY = 0;
 let buildMode = false;
-let wallHorizontal = true;
+let wallAngle = 0;      // free-build orientation (radians)
+let shiftHeld = false;  // snap ghost to existing walls while held
+let snapSteps = 0;      // 45° increments applied while snapping
+let rotQ = false, rotE = false;
 let camX = 0, camY = 0;
+
+const ROT_SPEED = 2.4;          // rad/s for gradual Q/E rotation
+const SNAP_STEP = Math.PI / 4;  // 45° steps when snapping
 
 function toCanvasCoords(e: MouseEvent): {x: number; y: number} {
   const rect = canvas.getBoundingClientRect();
@@ -63,8 +77,8 @@ canvas.addEventListener('mousedown', e => {
   const { x: sx, y: sy } = toCanvasCoords(e);
   const { x: mx, y: my } = toWorldCoords(sx, sy);
   if (buildMode) {
-    const { wx, wy, ww, wh } = ghostRect(mx, my);
-    player.buildAt(world, wx, wy, ww, wh);
+    const { wall, anchor } = ghostWall(mx, my);
+    player.buildAt(world, wall, anchor);
   } else {
     player.chop(world, mx, my);
   }
@@ -87,15 +101,41 @@ const enemy = new Enemy(s.x + 260, s.y - 180, [
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-// Snap cursor to grid and compute wall rect for current orientation.
-function ghostRect(mx: number, my: number): {wx: number; wy: number; ww: number; wh: number} {
-  const sx = Math.round(mx / TILE) * TILE;
-  const sy = Math.round(my / TILE) * TILE;
-  // Wall starts at the grid corner and extends right/down.
-  // The extra WALL_T length fills the corner square where two walls meet.
-  return wallHorizontal
-    ? { wx: sx, wy: sy, ww: WALL_W, wh: WALL_T }
-    : { wx: sx, wy: sy, ww: WALL_T, wh: WALL_W };
+// Nearest existing-wall endpoint within snap range, plus the outward direction
+// so a snapped ghost extends collinearly away from that wall.
+function nearestSnap(mx: number, my: number): { x: number; y: number; angle: number; wall: Wall } | null {
+  const R = 34;
+  let best: { x: number; y: number; angle: number; wall: Wall } | null = null;
+  let bestD = R;
+  for (const w of world.wallsInRect(mx - R, my - R, R * 2, R * 2)) {
+    for (const e of wallEndpoints(w)) {
+      const d = Math.hypot(e.x - mx, e.y - my);
+      if (d < bestD) {
+        bestD = d;
+        best = { x: e.x, y: e.y, angle: Math.atan2(e.y - w.cy, e.x - w.cx), wall: w };
+      }
+    }
+  }
+  return best;
+}
+
+// The wall the player would place: a fixed-length segment following the cursor,
+// or — while Shift is held near a wall — locked to that wall's endpoint and
+// angle (Q/E then swing it in 45° steps around the connected end). `anchor` is
+// the wall it locked onto, which the joint is allowed to overlap.
+function ghostWall(mx: number, my: number): { wall: Wall; anchor?: Wall } {
+  const hw = WALL_LEN / 2, hh = WALL_T / 2;
+  if (shiftHeld) {
+    const snap = nearestSnap(mx, my);
+    if (snap) {
+      const a = snap.angle + snapSteps * SNAP_STEP;
+      return {
+        wall: { cx: snap.x + hw * Math.cos(a), cy: snap.y + hw * Math.sin(a), hw, hh, a },
+        anchor: snap.wall,
+      };
+    }
+  }
+  return { wall: { cx: mx, cy: my, hw, hh, a: wallAngle } };
 }
 
 // ── Game loop ──────────────────────────────────────────────────────────────
@@ -108,6 +148,11 @@ function loop(ts: number): void {
 
   player.update(input, world, dt);
   enemy.update(player, world, dt);
+
+  // Gradual wall rotation while building (Shift instead uses discrete 45° snaps).
+  if (buildMode && !shiftHeld) {
+    wallAngle += ((rotE ? 1 : 0) - (rotQ ? 1 : 0)) * ROT_SPEED * dt;
+  }
 
   // Camera centres on the player, clamped so it never scrolls past the edges.
   camX = clamp(canvas.width  / 2 - player.x, canvas.width  - W, 0);
@@ -125,8 +170,8 @@ function loop(ts: number): void {
 
   if (buildMode) {
     const { x: wmx, y: wmy } = toWorldCoords(mouseX, mouseY);
-    const { wx, wy, ww, wh } = ghostRect(wmx, wmy);
-    drawGhostWall(ctx, wx, wy, ww, wh, player.canBuildAt(world, wx, wy, ww, wh));
+    const { wall, anchor } = ghostWall(wmx, wmy);
+    drawGhostWall(ctx, wall, player.canBuildAt(world, wall, anchor));
   }
 
   player.draw(ctx);
@@ -141,21 +186,24 @@ function loop(ts: number): void {
 
 function drawGhostWall(
   ctx: CanvasRenderingContext2D,
-  wx: number, wy: number, ww: number, wh: number,
+  wall: Wall,
   valid: boolean,
 ): void {
+  const x = -wall.hw, y = -wall.hh, w = wall.hw * 2, h = wall.hh * 2;
   ctx.save();
+  ctx.translate(wall.cx, wall.cy);
+  ctx.rotate(wall.a);
   ctx.globalAlpha = 0.45;
   ctx.fillStyle = valid ? '#8a7560' : '#c62828';
-  ctx.fillRect(wx, wy, ww, wh);
+  ctx.fillRect(x, y, w, h);
   ctx.globalAlpha = 0.6;
   ctx.fillStyle = valid ? '#a08c74' : '#ef9a9a';
-  ctx.fillRect(wx, wy, ww, 2);
-  ctx.fillRect(wx, wy, 2, wh);
+  ctx.fillRect(x, y, w, 2);
+  ctx.fillRect(x, y, 2, h);
   ctx.globalAlpha = 0.8;
   ctx.strokeStyle = valid ? '#ccc' : '#ef5350';
   ctx.lineWidth = 1.5;
-  ctx.strokeRect(wx + 0.75, wy + 0.75, ww - 1.5, wh - 1.5);
+  ctx.strokeRect(x + 0.75, y + 0.75, w - 1.5, h - 1.5);
   ctx.restore();
 }
 
@@ -164,7 +212,7 @@ function drawHUD(ctx: CanvasRenderingContext2D): void {
   const msg = chasing
     ? '! SPOTTED — break line-of-sight to lose the enemy'
     : buildMode
-      ? `[B/Esc] exit  ·  [R] rotate (${wallHorizontal ? '─' : '│'})  ·  click to place (costs 3 wood)`
+      ? '[B/Esc] exit  ·  [Q/E] rotate  ·  hold [Shift] to snap to walls  ·  click to place (3 wood)'
       : 'WASD to move  ·  click tree to chop  ·  [B] build mode';
 
   ctx.fillStyle = 'rgba(0,0,0,0.6)';

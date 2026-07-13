@@ -1,4 +1,4 @@
-import { circleOverlapsRect, type Wall } from './los';
+import { circleOverlapsWall, wallBounds, type Wall } from './los';
 import { drawTree, TREE_RADIUS, type Tree } from './tree';
 import { drawRock, type Rock } from './rock';
 import { generateChunk, biomeAt } from './worldgen';
@@ -34,15 +34,20 @@ function rectsOverlap(
   return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
 }
 
-function drawWall(ctx: CanvasRenderingContext2D, w: Wall): void {
+function drawWall(ctx: CanvasRenderingContext2D, wall: Wall): void {
+  ctx.save();
+  ctx.translate(wall.cx, wall.cy);
+  ctx.rotate(wall.a);
+  const x = -wall.hw, y = -wall.hh, w = wall.hw * 2, h = wall.hh * 2;
   ctx.fillStyle = '#8a7560';
-  ctx.fillRect(w.x, w.y, w.w, w.h);
+  ctx.fillRect(x, y, w, h);
   ctx.fillStyle = '#a08c74';
-  ctx.fillRect(w.x, w.y, w.w, 3);
-  ctx.fillRect(w.x, w.y, 3, w.h);
+  ctx.fillRect(x, y, w, 3);
+  ctx.fillRect(x, y, 3, h);
   ctx.fillStyle = '#6b5c4a';
-  ctx.fillRect(w.x, w.y + w.h - 3, w.w, 3);
-  ctx.fillRect(w.x + w.w - 3, w.y, 3, w.h);
+  ctx.fillRect(x, y + h - 3, w, 3);
+  ctx.fillRect(x + w - 3, y, 3, h);
+  ctx.restore();
 }
 
 export class World {
@@ -92,7 +97,8 @@ export class World {
     const out: Wall[] = [];
     this.forChunksInRect(x, y, w, h, ch => {
       for (const wall of ch.walls) {
-        if (rectsOverlap(x, y, w, h, wall.x, wall.y, wall.w, wall.h)) out.push(wall);
+        const b = wallBounds(wall);
+        if (rectsOverlap(x, y, w, h, b.x, b.y, b.w, b.h)) out.push(wall);
       }
     });
     return out;
@@ -151,7 +157,7 @@ export class World {
   }
 
   addWall(wall: Wall): void {
-    const ch = this.chunkAt(Math.floor(wall.x / CHUNK), Math.floor(wall.y / CHUNK));
+    const ch = this.chunkAt(Math.floor(wall.cx / CHUNK), Math.floor(wall.cy / CHUNK));
     if (ch) ch.walls.push(wall);
   }
 
@@ -159,7 +165,7 @@ export class World {
     this.forChunksInRect(cx - r, cy - r, 2 * r, 2 * r, ch => {
       ch.trees = ch.trees.filter(t => Math.hypot(t.x - cx, t.y - cy) > r);
       ch.rocks = ch.rocks.filter(rk => Math.hypot(rk.x - cx, rk.y - cy) > r + rk.r);
-      ch.walls = ch.walls.filter(w => !circleOverlapsRect(cx, cy, r, w.x, w.y, w.w, w.h));
+      ch.walls = ch.walls.filter(w => !circleOverlapsWall(cx, cy, r, w));
     });
   }
 

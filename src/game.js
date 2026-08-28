@@ -16,12 +16,19 @@ window.addEventListener('keydown', e => {
         e.preventDefault();
     }
     mapKey(e.key, true);
+    if ((e.key === 'c' || e.key === 'C') && !e.repeat)
+        toggleCrafting();
     if ((e.key === 'b' || e.key === 'B') && player.hasHammer && !craftingOpen)
         buildMode = !buildMode;
     if (e.key === 'Escape') {
         buildMode = false;
         craftingOpen = false;
+        hammerSelected = false;
     }
+    if (craftingOpen && e.key === '1')
+        hammerSelected = true;
+    if (craftingOpen && e.key === 'Enter' && !e.repeat)
+        craftSelectedRecipe();
     if (e.key === 'q' || e.key === 'Q') {
         rotQ = true;
         if (shiftHeld && !e.repeat)
@@ -60,6 +67,7 @@ function mapKey(key, val) {
 let mouseX = 0, mouseY = 0;
 let buildMode = false;
 let craftingOpen = false;
+let hammerSelected = false;
 let wallAngle = 0; // free-build orientation (radians)
 let shiftHeld = false; // snap ghost to existing walls while held
 let snapSteps = 0; // 45° increments applied while snapping
@@ -89,13 +97,14 @@ canvas.addEventListener('mousedown', e => {
         return;
     const { x: sx, y: sy } = toCanvasCoords(e);
     if (craftingOpen) {
-        if (inRect(sx, sy, CRAFT_ACTION) && player.craftHammer())
-            craftingOpen = false;
+        if (inRect(sx, sy, HAMMER_RECIPE))
+            hammerSelected = true;
+        if (hammerSelected && inRect(sx, sy, CRAFT_ACTION))
+            craftSelectedRecipe();
         return;
     }
     if (inRect(sx, sy, CRAFT_BUTTON)) {
-        craftingOpen = true;
-        buildMode = false;
+        toggleCrafting();
         return;
     }
     const { x: mx, y: my } = toWorldCoords(sx, sy);
@@ -109,6 +118,18 @@ canvas.addEventListener('mousedown', e => {
 });
 function inRect(x, y, rect) {
     return x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;
+}
+function toggleCrafting() {
+    craftingOpen = !craftingOpen;
+    hammerSelected = false;
+    if (craftingOpen)
+        buildMode = false;
+}
+function craftSelectedRecipe() {
+    if (player.craftHammer()) {
+        craftingOpen = false;
+        hammerSelected = false;
+    }
 }
 // ── Entities ───────────────────────────────────────────────────────────────
 const world = new World(SEED);
@@ -258,9 +279,10 @@ function drawCraftingPanel(ctx) {
     ctx.fillText('CRAFTING', CRAFT_PANEL.x + 24, CRAFT_PANEL.y + 38);
     ctx.fillStyle = '#8a7560';
     ctx.fillRect(CRAFT_PANEL.x + 24, CRAFT_PANEL.y + 52, CRAFT_PANEL.w - 48, 1);
-    ctx.fillStyle = '#40362d';
+    ctx.fillStyle = hammerSelected ? '#4d4033' : '#40362d';
     ctx.fillRect(HAMMER_RECIPE.x, HAMMER_RECIPE.y, HAMMER_RECIPE.w, HAMMER_RECIPE.h);
-    ctx.strokeStyle = '#6b5c4a';
+    ctx.strokeStyle = hammerSelected ? '#d7b86a' : '#6b5c4a';
+    ctx.lineWidth = hammerSelected ? 2 : 1;
     ctx.strokeRect(HAMMER_RECIPE.x + 0.5, HAMMER_RECIPE.y + 0.5, HAMMER_RECIPE.w - 1, HAMMER_RECIPE.h - 1);
     drawHammerIcon(ctx, HAMMER_RECIPE.x + 34, HAMMER_RECIPE.y + 46, '#d7ccc8');
     ctx.fillStyle = '#f5f1e8';
@@ -269,7 +291,7 @@ function drawCraftingPanel(ctx) {
     ctx.fillStyle = player.wood >= HAMMER_COST ? '#a5d6a7' : '#ef9a9a';
     ctx.font = '13px monospace';
     ctx.fillText(`${HAMMER_COST} wood`, HAMMER_RECIPE.x + 65, HAMMER_RECIPE.y + 59);
-    const canCraft = !player.hasHammer && player.wood >= HAMMER_COST;
+    const canCraft = hammerSelected && !player.hasHammer && player.wood >= HAMMER_COST;
     ctx.fillStyle = canCraft ? '#6d8a54' : '#544b42';
     ctx.fillRect(CRAFT_ACTION.x, CRAFT_ACTION.y, CRAFT_ACTION.w, CRAFT_ACTION.h);
     ctx.fillStyle = canCraft ? '#f5f1e8' : '#b0a69b';
@@ -278,6 +300,6 @@ function drawCraftingPanel(ctx) {
     ctx.textAlign = 'left';
     ctx.fillStyle = '#b0a69b';
     ctx.font = '12px monospace';
-    ctx.fillText('Esc to close', CRAFT_PANEL.x + 24, CRAFT_PANEL.y + CRAFT_PANEL.h - 20);
+    ctx.fillText('1 select hammer  ·  Enter craft  ·  Esc close', CRAFT_PANEL.x + 24, CRAFT_PANEL.y + CRAFT_PANEL.h - 20);
 }
 requestAnimationFrame(ts => { prev = ts; requestAnimationFrame(loop); });

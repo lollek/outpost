@@ -26,7 +26,7 @@ npm install
 npm run dev
 ```
 
-Then open [http://localhost:5173](http://localhost:5173) in your browser. Use WASD or arrow keys to move. Click a tree to chop it. Click the hammer icon in the upper-right to open crafting, then craft a hammer for 5 wood. Press **B** to enter build mode, use **Q**/**E** to rotate the wall preview, and click to place a wall.
+Then open [http://localhost:5173](http://localhost:5173) in your browser. Use WASD or arrow keys to move. Click a tree to chop it. Click the hammer icon in the upper-right, or press **C**, to open crafting. Select Hammer with a click or **1**, then click **Craft** or press **Enter** to craft it for 5 wood. Press **B** to enter build mode, use **Q**/**E** to rotate the wall preview, and click to place a wall.
 
 Change `SEED` in `src/game.ts` for a different map.
 

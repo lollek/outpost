@@ -13,12 +13,14 @@ const SPEED          = 180; // px/s
 export const RADIUS    = 10;
 export { WALL_T };
 export const WALL_LEN  = 46;  // length of a freshly placed wall segment
-const WALL_COST        = 3;   // wood per wall
+export const WALL_COST   = 3; // wood per wall
+export const HAMMER_COST = 5; // wood to craft the building hammer
 
 export class Player {
   x: number;
   y: number;
   wood   = 0;
+  hasHammer = false;
   facing = 0; // radians, updated from movement direction
 
   constructor(x: number, y: number) {
@@ -80,11 +82,19 @@ export class Player {
     return false;
   }
 
-  // Returns true if `wall` is a legal placement: inside the world, not
-  // overlapping any wall (touching is fine), tree, rock or the player. `anchor`
-  // is the wall being snapped/locked onto — it is allowed to overlap so corners
-  // and joints can meet.
+  craftHammer(): boolean {
+    if (this.hasHammer || this.wood < HAMMER_COST) return false;
+    this.wood -= HAMMER_COST;
+    this.hasHammer = true;
+    return true;
+  }
+
+  // Returns true if `wall` is affordable and a legal placement: inside the
+  // world, not overlapping any wall (touching is fine), tree, rock or player.
+  // `anchor` is the wall being snapped/locked onto — it is allowed to overlap
+  // so corners and joints can meet.
   canBuildAt(world: World, wall: Wall, anchor?: Wall): boolean {
+    if (!this.hasHammer || this.wood < WALL_COST) return false;
     const b = wallBounds(wall);
     if (b.x < 0 || b.y < 0 || b.x + b.w > W || b.y + b.h > H) return false;
     for (const w of world.wallsInRect(b.x - 1, b.y - 1, b.w + 2, b.h + 2)) {
@@ -103,7 +113,7 @@ export class Player {
 
   // Place `wall` if affordable and legal.
   buildAt(world: World, wall: Wall, anchor?: Wall): void {
-    if (this.wood < WALL_COST || !this.canBuildAt(world, wall, anchor)) return;
+    if (!this.canBuildAt(world, wall, anchor)) return;
     world.addWall(wall);
     this.wood -= WALL_COST;
   }

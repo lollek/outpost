@@ -14,7 +14,8 @@ Early in development. See [doc/game-design-document.md](doc/game-design-document
 - An enemy that patrols a waypoint path with a visible cone of vision
 - Line-of-sight detection blocked by walls, trees, and rocks — duck behind cover to break it
 - Chase and give-up states based on whether the enemy can see you
-- Grid-snapped wall building (costs 3 wood)
+- Mouse-driven crafting screen with a 5-wood hammer recipe
+- Grid-snapped wall building (requires a hammer and costs 3 wood)
 
 ## Getting started
 
@@ -25,7 +26,7 @@ npm install
 npm run dev
 ```
 
-Then open [http://localhost:5173](http://localhost:5173) in your browser. Use WASD or arrow keys to move. Click a tree to chop it. Press **B** to enter build mode, **R** to rotate the wall preview, click to place.
+Then open [http://localhost:5173](http://localhost:5173) in your browser. Use WASD or arrow keys to move. Click a tree to chop it. Click the hammer icon in the upper-right to open crafting, then craft a hammer for 5 wood. Press **B** to enter build mode, use **Q**/**E** to rotate the wall preview, and click to place a wall.
 
 Change `SEED` in `src/game.ts` for a different map.
 

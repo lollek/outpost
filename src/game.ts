@@ -1,5 +1,5 @@
 import { World, W, H, spawnPoint, type View } from './world';
-import { Player, WALL_LEN, WALL_T } from './player';
+import { Player, HAMMER_COST, WALL_LEN, WALL_T } from './player';
 import type { Input } from './player';
 import { Enemy } from './enemy';
 import { wallEndpoints, type Wall } from './los';
@@ -23,8 +23,8 @@ window.addEventListener('keydown', e => {
     e.preventDefault();
   }
   mapKey(e.key, true);
-  if (e.key === 'b' || e.key === 'B') buildMode = !buildMode;
-  if (e.key === 'Escape') buildMode = false;
+  if ((e.key === 'b' || e.key === 'B') && player.hasHammer && !craftingOpen) buildMode = !buildMode;
+  if (e.key === 'Escape') { buildMode = false; craftingOpen = false; }
   if (e.key === 'q' || e.key === 'Q') { rotQ = true; if (shiftHeld && !e.repeat) snapSteps--; }
   if (e.key === 'e' || e.key === 'E') { rotE = true; if (shiftHeld && !e.repeat) snapSteps++; }
   if (e.key === 'Shift' && !shiftHeld) { shiftHeld = true; snapSteps = 0; }
@@ -47,6 +47,7 @@ function mapKey(key: string, val: boolean): void {
 
 let mouseX = 0, mouseY = 0;
 let buildMode = false;
+let craftingOpen = false;
 let wallAngle = 0;      // free-build orientation (radians)
 let shiftHeld = false;  // snap ghost to existing walls while held
 let snapSteps = 0;      // 45° increments applied while snapping
@@ -55,6 +56,10 @@ let camX = 0, camY = 0;
 
 const ROT_SPEED = 2.4;          // rad/s for gradual Q/E rotation
 const SNAP_STEP = Math.PI / 4;  // 45° steps when snapping
+const CRAFT_BUTTON = { x: 756, y: 4, w: 28, h: 22 };
+const CRAFT_PANEL = { x: 210, y: 185, w: 380, h: 230 };
+const HAMMER_RECIPE = { x: 234, y: 254, w: 332, h: 92 };
+const CRAFT_ACTION = { x: 442, y: 302, w: 100, h: 30 };
 
 function toCanvasCoords(e: MouseEvent): {x: number; y: number} {
   const rect = canvas.getBoundingClientRect();
@@ -75,6 +80,15 @@ canvas.addEventListener('mousemove', e => {
 canvas.addEventListener('mousedown', e => {
   if (e.button !== 0) return;
   const { x: sx, y: sy } = toCanvasCoords(e);
+  if (craftingOpen) {
+    if (inRect(sx, sy, CRAFT_ACTION) && player.craftHammer()) craftingOpen = false;
+    return;
+  }
+  if (inRect(sx, sy, CRAFT_BUTTON)) {
+    craftingOpen = true;
+    buildMode = false;
+    return;
+  }
   const { x: mx, y: my } = toWorldCoords(sx, sy);
   if (buildMode) {
     const { wall, anchor } = ghostWall(mx, my);
@@ -83,6 +97,10 @@ canvas.addEventListener('mousedown', e => {
     player.chop(world, mx, my);
   }
 });
+
+function inRect(x: number, y: number, rect: { x: number; y: number; w: number; h: number }): boolean {
+  return x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;
+}
 
 // ── Entities ───────────────────────────────────────────────────────────────
 
@@ -146,11 +164,13 @@ function loop(ts: number): void {
   const dt = Math.min((ts - prev) / 1000, 0.05);
   prev = ts;
 
-  player.update(input, world, dt);
-  enemy.update(player, world, dt);
+  if (!craftingOpen) {
+    player.update(input, world, dt);
+    enemy.update(player, world, dt);
+  }
 
   // Gradual wall rotation while building (Shift instead uses discrete 45° snaps).
-  if (buildMode && !shiftHeld) {
+  if (buildMode && !shiftHeld && !craftingOpen) {
     wallAngle += ((rotE ? 1 : 0) - (rotQ ? 1 : 0)) * ROT_SPEED * dt;
   }
 
@@ -180,6 +200,7 @@ function loop(ts: number): void {
   ctx.restore();
 
   drawHUD(ctx);
+  if (craftingOpen) drawCraftingPanel(ctx);
 
   requestAnimationFrame(loop);
 }
@@ -213,7 +234,9 @@ function drawHUD(ctx: CanvasRenderingContext2D): void {
     ? '! SPOTTED — break line-of-sight to lose the enemy'
     : buildMode
       ? '[B/Esc] exit  ·  [Q/E] rotate  ·  hold [Shift] to snap to walls  ·  click to place (3 wood)'
-      : 'WASD to move  ·  click tree to chop  ·  [B] build mode';
+      : player.hasHammer
+        ? 'WASD to move  ·  click tree to chop  ·  [B] build mode'
+        : 'WASD to move  ·  click tree to chop  ·  craft a hammer to build';
 
   ctx.fillStyle = 'rgba(0,0,0,0.6)';
   ctx.fillRect(0, 0, 800, 30);
@@ -223,8 +246,66 @@ function drawHUD(ctx: CanvasRenderingContext2D): void {
 
   ctx.fillStyle = '#a5d6a7';
   ctx.textAlign = 'right';
-  ctx.fillText(`wood: ${player.wood}`, 788, 20);
+  ctx.fillText(`wood: ${player.wood}`, 746, 20);
   ctx.textAlign = 'left';
+
+  ctx.fillStyle = craftingOpen ? '#5d4037' : '#8a7560';
+  ctx.fillRect(CRAFT_BUTTON.x, CRAFT_BUTTON.y, CRAFT_BUTTON.w, CRAFT_BUTTON.h);
+  ctx.strokeStyle = '#d7ccc8';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(CRAFT_BUTTON.x + 0.5, CRAFT_BUTTON.y + 0.5, CRAFT_BUTTON.w - 1, CRAFT_BUTTON.h - 1);
+  drawHammerIcon(ctx, CRAFT_BUTTON.x + 14, CRAFT_BUTTON.y + 11, '#f5f1e8');
+}
+
+function drawHammerIcon(ctx: CanvasRenderingContext2D, x: number, y: number, color: string): void {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(-Math.PI / 4);
+  ctx.fillStyle = color;
+  ctx.fillRect(-2, -8, 4, 16);
+  ctx.fillRect(-7, -9, 14, 5);
+  ctx.restore();
+}
+
+function drawCraftingPanel(ctx: CanvasRenderingContext2D): void {
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.58)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.fillStyle = '#2d2721';
+  ctx.fillRect(CRAFT_PANEL.x, CRAFT_PANEL.y, CRAFT_PANEL.w, CRAFT_PANEL.h);
+  ctx.strokeStyle = '#9d8a73';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(CRAFT_PANEL.x + 1, CRAFT_PANEL.y + 1, CRAFT_PANEL.w - 2, CRAFT_PANEL.h - 2);
+
+  ctx.fillStyle = '#f5f1e8';
+  ctx.font = '18px monospace';
+  ctx.fillText('CRAFTING', CRAFT_PANEL.x + 24, CRAFT_PANEL.y + 38);
+  ctx.fillStyle = '#8a7560';
+  ctx.fillRect(CRAFT_PANEL.x + 24, CRAFT_PANEL.y + 52, CRAFT_PANEL.w - 48, 1);
+
+  ctx.fillStyle = '#40362d';
+  ctx.fillRect(HAMMER_RECIPE.x, HAMMER_RECIPE.y, HAMMER_RECIPE.w, HAMMER_RECIPE.h);
+  ctx.strokeStyle = '#6b5c4a';
+  ctx.strokeRect(HAMMER_RECIPE.x + 0.5, HAMMER_RECIPE.y + 0.5, HAMMER_RECIPE.w - 1, HAMMER_RECIPE.h - 1);
+  drawHammerIcon(ctx, HAMMER_RECIPE.x + 34, HAMMER_RECIPE.y + 46, '#d7ccc8');
+  ctx.fillStyle = '#f5f1e8';
+  ctx.font = '16px monospace';
+  ctx.fillText('Hammer', HAMMER_RECIPE.x + 65, HAMMER_RECIPE.y + 36);
+  ctx.fillStyle = player.wood >= HAMMER_COST ? '#a5d6a7' : '#ef9a9a';
+  ctx.font = '13px monospace';
+  ctx.fillText(`${HAMMER_COST} wood`, HAMMER_RECIPE.x + 65, HAMMER_RECIPE.y + 59);
+
+  const canCraft = !player.hasHammer && player.wood >= HAMMER_COST;
+  ctx.fillStyle = canCraft ? '#6d8a54' : '#544b42';
+  ctx.fillRect(CRAFT_ACTION.x, CRAFT_ACTION.y, CRAFT_ACTION.w, CRAFT_ACTION.h);
+  ctx.fillStyle = canCraft ? '#f5f1e8' : '#b0a69b';
+  ctx.textAlign = 'center';
+  ctx.fillText(player.hasHammer ? 'OWNED' : 'CRAFT', CRAFT_ACTION.x + CRAFT_ACTION.w / 2, CRAFT_ACTION.y + 20);
+  ctx.textAlign = 'left';
+
+  ctx.fillStyle = '#b0a69b';
+  ctx.font = '12px monospace';
+  ctx.fillText('Esc to close', CRAFT_PANEL.x + 24, CRAFT_PANEL.y + CRAFT_PANEL.h - 20);
 }
 
 requestAnimationFrame(ts => { prev = ts; requestAnimationFrame(loop); });
